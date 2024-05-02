@@ -604,6 +604,19 @@ describe('destroy', () => {
   });
 });
 
+describe('rollback', () => {
+  test('rollback correct stack', async () => {
+    const toolkit = defaultToolkitSetup();
+
+    await expect(() => {
+      return toolkit.rollback({
+        selector: { patterns: ['Test-Stack-A/Test-Stack-C'] },
+        exclusively: true,
+      });
+    }).resolves;
+  });
+});
+
 describe('watch', () => {
   test("fails when no 'watch' settings are found", async () => {
     const toolkit = defaultToolkitSetup();

@@ -9,7 +9,7 @@ import { HotswapMode, ICON } from './hotswap/common';
 import { tryHotswapDeployment } from './hotswap-deployments';
 import {
   changeSetHasNoChanges, CloudFormationStack, TemplateParameters, waitForChangeSet,
-  waitForStackDeploy, waitForStackDelete, ParameterValues, ParameterChanges, ResourcesToImport,
+  waitForStackDeploy, waitForStackDelete, ParameterValues, ParameterChanges, ResourcesToImport, waitForStackRollback,
 } from './util/cloudformation';
 import { StackActivityMonitor, StackActivityProgress } from './util/cloudformation/stack-activity-monitor';
 import { TemplateBodyParameter, makeBodyParameter } from './util/template-body-parameter';
@@ -555,6 +555,49 @@ class FullCloudFormationDeployment {
       StackName: this.stackName,
       ...shouldDisableRollback ? { DisableRollback: true } : undefined,
     };
+  }
+}
+
+export interface RollbackStackOptions {
+  /**
+   * The stack to be destroyed
+   */
+  stack: cxapi.CloudFormationStackArtifact;
+
+  sdk: ISDK;
+  roleArn?: string;
+  deployName?: string;
+  quiet?: boolean;
+  ci?: boolean;
+}
+
+export async function rollbackStack(options: RollbackStackOptions) {
+  const deployName = options.deployName || options.stack.stackName;
+  const cfn = options.sdk.cloudFormation();
+
+  const currentStack = await CloudFormationStack.lookup(cfn, deployName);
+  if (!currentStack.exists) {
+    warning(`Stack ${deployName} does not exist and cannot be rolled back, skipping`);
+    return;
+  }
+  if (!currentStack.stackStatus.isFailure) {
+    warning(`Stack ${deployName} is not in a state to be rolled back (${currentStack.stackStatus.name}), skipping`);
+    return;
+  }
+  const monitor = options.quiet ? undefined : StackActivityMonitor.withDefaultPrinter(cfn, deployName, options.stack, {
+    ci: options.ci,
+  }).start();
+
+  try {
+    await cfn.rollbackStack({ StackName: deployName, RoleARN: options.roleArn }).promise();
+    const rolledbackStack = await waitForStackRollback(cfn, deployName);
+    if (rolledbackStack && !rolledbackStack.stackStatus.name.endsWith('_COMPLETE')) {
+      throw new Error(`Failed to rollback ${deployName}: ${rolledbackStack.stackStatus}`);
+    }
+  } catch (e: any) {
+    throw new Error(suffixWithErrors(e.message, monitor?.errors));
+  } finally {
+    if (monitor) { await monitor.stop(); }
   }
 }
 

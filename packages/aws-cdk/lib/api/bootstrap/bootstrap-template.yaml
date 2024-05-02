@@ -453,6 +453,7 @@ Resources:
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:CreateStack
                   - cloudformation:UpdateStack
+                  - cloudformation:RollbackStack
                 Resource: "*"
               - Sid: PipelineCrossAccountArtifactsBucket
                 # Read/write buckets in different accounts. Permissions to buckets in
@@ -619,7 +620,7 @@ Resources:
       Type: String
       Name:
         Fn::Sub: '/cdk-bootstrap/${Qualifier}/version'
-      Value: '20'
+      Value: '21'
 Outputs:
   BucketName:
     Description: The name of the S3 bucket owned by the CDK toolkit stack

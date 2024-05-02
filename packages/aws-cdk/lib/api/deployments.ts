@@ -4,7 +4,7 @@ import { AssetManifest, IManifestEntry } from 'cdk-assets';
 import { Mode } from './aws-auth/credentials';
 import { ISDK } from './aws-auth/sdk';
 import { CredentialsOptions, SdkForEnvironment, SdkProvider } from './aws-auth/sdk-provider';
-import { deployStack, DeployStackResult, destroyStack, DeploymentMethod } from './deploy-stack';
+import { deployStack, DeployStackResult, destroyStack, DeploymentMethod, rollbackStack } from './deploy-stack';
 import { EnvironmentResources, EnvironmentResourcesRegistry } from './environment-resources';
 import { HotswapMode } from './hotswap/common';
 import { loadCurrentTemplateWithNestedStacks, loadCurrentTemplate, RootTemplateWithNestedStacks } from './nested-stack-helpers';
@@ -253,6 +253,14 @@ interface PublishStackAssetsOptions extends AssetOptions {
   readonly stackName?: string;
 }
 
+export interface RollbackStackOptions {
+  stack: cxapi.CloudFormationStackArtifact;
+  deployName?: string;
+  roleArn?: string;
+  quiet?: boolean;
+  ci?: boolean;
+}
+
 export interface DestroyStackOptions {
   stack: cxapi.CloudFormationStackArtifact;
   deployName?: string;
@@ -414,6 +422,30 @@ export class Deployments {
       resourcesToImport: options.resourcesToImport,
       overrideTemplate: options.overrideTemplate,
       assetParallelism: options.assetParallelism,
+    });
+  }
+
+  public async rollbackStack(options: RollbackStackOptions): Promise<void> {
+    const {
+      stackSdk,
+      cloudFormationRoleArn: roleArn,
+      envResources,
+    } = await this.prepareSdkFor(options.stack, options.roleArn, Mode.ForWriting);
+
+    // Do a verification of the bootstrap stack version
+    await this.validateBootstrapStackVersion(
+      options.stack.stackName,
+      7,
+      options.stack.bootstrapStackVersionSsmParameter,
+      envResources);
+
+    return rollbackStack({
+      sdk: stackSdk,
+      roleArn,
+      stack: options.stack,
+      deployName: options.deployName,
+      quiet: options.quiet,
+      ci: options.ci,
     });
   }
 

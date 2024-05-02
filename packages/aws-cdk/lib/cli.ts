@@ -252,6 +252,10 @@ async function parseCommandLineArguments(args: string[]) {
       })
       .option('concurrency', { type: 'number', desc: 'Maximum number of simultaneous deployments (dependency permitting) to execute.', default: 1, requiresArg: true }),
     )
+    .command('rollback [STACKS..]', 'Rollback the stack(s) named STACKS', (yargs: Argv) => yargs
+      .option('all', { type: 'boolean', default: false, desc: 'Rollback all available stacks' })
+      .option('exclusively', { type: 'boolean', alias: 'e', desc: 'Only rollback requested stacks, don\'t include dependees' }),
+    )
     .command('destroy [STACKS..]', 'Destroy the stack(s) named STACKS', (yargs: Argv) => yargs
       .option('all', { type: 'boolean', default: false, desc: 'Destroy all available stacks' })
       .option('exclusively', { type: 'boolean', alias: 'e', desc: 'Only destroy requested stacks, don\'t include dependees' })
@@ -645,6 +649,13 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
           hotswap: determineHotswapMode(args.hotswap, args.hotswapFallback, true),
           traceLogs: args.logs,
           concurrency: args.concurrency,
+        });
+      case 'rollback':
+        return cli.rollback({
+          selector,
+          exclusively: args.exclusively,
+          roleArn: args.roleArn,
+          ci: args.ci,
         });
 
       case 'destroy':

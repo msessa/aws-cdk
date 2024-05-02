@@ -424,6 +424,33 @@ export function changeSetHasNoChanges(description: CloudFormation.DescribeChange
 
 /**
  * Waits for a CloudFormation stack to stabilize in a complete/available state
+ * after a rollback operation is issued.
+ *
+ * Fails if the stack is in a FAILED state, or DELETED state.
+ *
+ * @param cfn        a CloudFormation client
+ * @param stackName      the name of the stack to wait for after an update
+ *
+ * @returns     the CloudFormation description of the stabilized stack after the update attempt
+ */
+export async function waitForStackRollback(
+  cfn: CloudFormation,
+  stackName: string): Promise<CloudFormationStack | undefined> {
+
+  const stack = await stabilizeStack(cfn, stackName);
+  if (!stack) { return undefined; }
+
+  const status = stack.stackStatus;
+
+  if (!status.isRollbackSuccess) {
+    throw new Error(`The stack named ${stackName} failed to rollback: ${status}`);
+  }
+
+  return stack;
+}
+
+/**
+ * Waits for a CloudFormation stack to stabilize in a complete/available state
  * after a delete operation is issued.
  *
  * Fails if the stack is in a FAILED state. Will not fail if the stack was

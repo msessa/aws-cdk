@@ -625,6 +625,25 @@ export class CdkToolkit {
     }
   }
 
+  public async rollback(options: RollbackOptions) {
+    let stacks = await this.selectStacksForRollback(options.selector, options.exclusively);
+    for (const [index, stack] of stacks.stackArtifacts.entries()) {
+      success('%s: rolling back... [%s/%s]', chalk.blue(stack.displayName), index+1, stacks.stackCount);
+      try {
+        await this.props.deployments.rollbackStack({
+          stack,
+          deployName: stack.stackName,
+          roleArn: options.roleArn,
+          ci: options.ci,
+        });
+        success('\n ✅  %s: rolled back', chalk.blue(stack.displayName));
+      } catch (e) {
+        error('\n ❌  %s: rollback failed', chalk.blue(stack.displayName), e);
+        throw e;
+      }
+    }
+  }
+
   public async destroy(options: DestroyOptions) {
     let stacks = await this.selectStacksForDestroy(options.selector, options.exclusively);
 
@@ -917,6 +936,18 @@ export class CdkToolkit {
     this.validateStacks(selectedForDiff.concat(autoValidateStacks));
 
     return selectedForDiff;
+  }
+
+  private async selectStacksForRollback(selector: StackSelector, exclusively?: boolean) {
+    const assembly = await this.assembly();
+    const stacks = await assembly.selectStacks(selector, {
+      extend: exclusively ? ExtendedStackSelection.None : ExtendedStackSelection.Upstream,
+      defaultBehavior: DefaultSelection.AllStacks,
+    });
+
+    // No validation
+
+    return stacks;
   }
 
   private async selectStacksForDestroy(selector: StackSelector, exclusively?: boolean) {
@@ -1394,6 +1425,30 @@ export interface ImportOptions extends CfnDeployOptions {
    * @default false
    */
   readonly force?: boolean;
+}
+
+export interface RollbackOptions {
+  /**
+   * Criteria for selecting stacks to rollback
+   */
+  selector: StackSelector;
+
+  /**
+   * Whether to exclude stacks that depend on the stacks to be rolled back
+   */
+  exclusively: boolean;
+
+  /**
+   * The arn of the IAM role to use
+   */
+  roleArn?: string;
+
+  /**
+   * Whether we are on a CI system
+   *
+   * @default false
+   */
+  readonly ci?: boolean;
 }
 
 export interface DestroyOptions {
